@@ -10,7 +10,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from sampletracker.db.database import get_engine, migrate_schema, save_sample_requests
+from sampletracker.db.database import ensure_schema, save_sample_requests
 
 SESSION_SAMPLES_KEY = "pending_samples"
 ADD_FORM_VERSION_KEY = "add_form_version"
@@ -130,17 +130,10 @@ def _render_pending_table() -> None:
     st.table(_pending_table_rows())
 
 
-def _ensure_database_schema() -> None:
-    """Make sure existing SQLite files include newer columns."""
-    engine = get_engine()
-    migrate_schema(engine)
-    engine.dispose()
-
-
 def main() -> None:
     st.set_page_config(page_title="Sample Request Kobo UK", layout="wide")
     _init_session_state()
-    _ensure_database_schema()
+    ensure_schema()
 
     st.markdown(
         """

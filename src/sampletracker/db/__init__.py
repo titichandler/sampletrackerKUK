@@ -2,6 +2,7 @@
 
 from sampletracker.db.database import (
     create_database,
+    ensure_schema,
     get_database_path,
     get_session,
     save_sample_request,
@@ -14,6 +15,7 @@ __all__ = [
     "FormulaLibrary",
     "SampleRequest",
     "create_database",
+    "ensure_schema",
     "get_database_path",
     "get_session",
     "save_sample_request",

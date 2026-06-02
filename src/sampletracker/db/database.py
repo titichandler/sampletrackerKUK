@@ -142,11 +142,17 @@ def migrate_schema(engine: Engine) -> None:
             )
 
 
-def create_database(db_path: Path | None = None) -> str:
-    """Create tables. Returns DATABASE_URL or local SQLite path."""
+def ensure_schema(db_path: Path | None = None) -> None:
+    """Create tables if missing; apply SQLite-only column migrations."""
     engine = get_engine(db_path)
     Base.metadata.create_all(engine)
     migrate_schema(engine)
+
+
+def create_database(db_path: Path | None = None) -> str:
+    """Create tables. Returns DATABASE_URL or local SQLite path."""
+    ensure_schema(db_path)
+    engine = get_engine(db_path)
     engine.dispose()
 
     database_url = resolve_database_url()
