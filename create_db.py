@@ -23,8 +23,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    db_path = create_database(args.db_path)
-    print(f"Database created: {db_path}")
+    target = create_database(args.db_path)
+    print(f"Database ready: {target}")
     print("Tables: formula_library, sample_requests")
 
 

@@ -1,7 +1,8 @@
-"""SQLite engine, sessions, and persistence helpers."""
+"""Database engine, sessions, and persistence (SQLite locally, Postgres on Streamlit Cloud)."""
 
 from __future__ import annotations
 
+import os
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
@@ -18,22 +19,60 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_DATABASE_PATH = _PROJECT_ROOT / "data" / "sampletracker.db"
 REQUEST_NUMBER_PREFIX = "KUK-SR-"
 
+_session_factory: sessionmaker[Session] | None = None
+_bound_engine_url: str | None = None
+
+
+def resolve_database_url() -> str | None:
+    """Read DATABASE_URL from environment or Streamlit secrets (cloud)."""
+    url = os.environ.get("DATABASE_URL", "").strip()
+    if url:
+        return url
+
+    try:
+        import streamlit as st
+
+        if "DATABASE_URL" in st.secrets:
+            secret_url = str(st.secrets["DATABASE_URL"]).strip()
+            if secret_url:
+                return secret_url
+    except Exception:
+        pass
+
+    return None
+
+
+def uses_cloud_database() -> bool:
+    """True when DATABASE_URL is set (Neon / Postgres)."""
+    return resolve_database_url() is not None
+
 
 def get_database_path() -> Path:
-    """Return the default path to the SQLite database file."""
+    """Return the default path to the local SQLite database file."""
     return DEFAULT_DATABASE_PATH
 
 
 def get_engine(db_path: Path | None = None) -> Engine:
-    """Create a SQLAlchemy engine for the given SQLite file."""
+    """Create a SQLAlchemy engine (Postgres if DATABASE_URL is set, else SQLite)."""
+    database_url = resolve_database_url()
+    if database_url:
+        return create_engine(database_url, echo=False)
+
     path = db_path or get_database_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    url = f"sqlite:///{path.resolve().as_posix()}"
-    return create_engine(url, echo=False)
+    sqlite_url = f"sqlite:///{path.resolve().as_posix()}"
+    return create_engine(sqlite_url, echo=False)
+
+
+def _is_sqlite_engine(engine: Engine) -> bool:
+    return engine.dialect.name == "sqlite"
 
 
 def migrate_schema(engine: Engine) -> None:
-    """Apply lightweight schema updates for existing SQLite databases."""
+    """Apply lightweight schema updates for existing SQLite databases only."""
+    if not _is_sqlite_engine(engine):
+        return
+
     inspector = inspect(engine)
     if "sample_requests" not in inspector.get_table_names():
         return
@@ -103,26 +142,28 @@ def migrate_schema(engine: Engine) -> None:
             )
 
 
-def create_database(db_path: Path | None = None) -> Path:
-    """Create the SQLite file and all tables defined in models."""
-    path = db_path or get_database_path()
-    engine = get_engine(path)
+def create_database(db_path: Path | None = None) -> str:
+    """Create tables. Returns DATABASE_URL or local SQLite path."""
+    engine = get_engine(db_path)
     Base.metadata.create_all(engine)
     migrate_schema(engine)
     engine.dispose()
-    return path.resolve()
 
-
-# Reused session factory (one engine per process).
-_session_factory: sessionmaker[Session] | None = None
+    database_url = resolve_database_url()
+    if database_url:
+        return database_url
+    return str((db_path or get_database_path()).resolve())
 
 
 def get_session_factory(db_path: Path | None = None) -> sessionmaker[Session]:
-    """Return a configured SQLAlchemy sessionmaker bound to the SQLite engine."""
-    global _session_factory
-    if _session_factory is None:
-        engine = get_engine(db_path)
+    """Return a sessionmaker bound to the active database engine."""
+    global _session_factory, _bound_engine_url
+
+    engine = get_engine(db_path)
+    engine_url = str(engine.url)
+    if _session_factory is None or _bound_engine_url != engine_url:
         _session_factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+        _bound_engine_url = engine_url
     return _session_factory
 
 
