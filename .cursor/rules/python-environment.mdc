@@ -1,0 +1,18 @@
+---
+description: Use the project Python virtual environment for all commands
+alwaysApply: true
+---
+
+# Python environment
+
+This project uses a virtual environment at `.venv` on Windows.
+
+- Detect the OS from the shell environment before choosing commands.
+- Do **not** use bare `python` or `pip` without the venv path.
+- Run Python as: `.venv\Scripts\python.exe` (Windows) or `.venv/bin/python` (macOS/Linux).
+- Run pip as: `.venv\Scripts\python.exe -m pip` (Windows) or `.venv/bin/python -m pip` (macOS/Linux).
+- When using a terminal, activate the venv in the same command if needed:
+  - Windows: `.\.venv\Scripts\Activate.ps1`
+  - Unix: `source .venv/bin/activate`
+
+Python executable (Windows): `c:\Users\kobop\Documents\Sampletracker\.venv\Scripts\python.exe`
