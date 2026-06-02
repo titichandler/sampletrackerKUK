@@ -312,10 +312,8 @@ def main() -> None:
                 st.session_state[ADD_FORM_VERSION_KEY] += 1
                 st.rerun()
 
-    if "last_saved_requests" in st.session_state:
-        saved_number = st.session_state.pop("last_saved_request_number", "")
-        st.success(f"Request **{saved_number}** saved successfully.")
-        st.table(st.session_state.pop("last_saved_requests"))
+    if st.session_state.pop("show_submit_success", False):
+        st.success("Your sample request was submitted successfully.")
 
     if submit_clicked:
         pending = st.session_state[SESSION_SAMPLES_KEY]
@@ -343,29 +341,13 @@ def main() -> None:
         ]
 
         try:
-            saved = save_sample_requests(items_to_save)
+            save_sample_requests(items_to_save)
         except Exception as exc:
             st.error(f"Could not save request: {exc}")
             return
 
         st.session_state[SESSION_SAMPLES_KEY] = []
-        st.session_state["last_saved_request_number"] = saved[0]["request_number"]
-        st.session_state["last_saved_requests"] = [
-            {
-                "Request Number": row["request_number"],
-                "ID": row["id"],
-                "Email": row["email"],
-                "Request Origin": row["request_origin"],
-                "Formula Code": (
-                    "-" if row["formula_code"] == MANUAL_CODE_PLACEHOLDER else row["formula_code"]
-                ),
-                "Formula Name": row["formula_name"],
-                "Number of Samples": row["num_samples"],
-                "Due Date": row["due_date"] or "—",
-                "Created At": row["created_at"],
-            }
-            for row in saved
-        ]
+        st.session_state["show_submit_success"] = True
         st.rerun()
 
 
