@@ -11,6 +11,7 @@ import pandas as pd
 import streamlit as st
 
 from sampletracker.db.database import ensure_schema, save_sample_requests
+from sampletracker.excel_log import is_excel_sync_enabled, sync_saved_requests_to_excel
 
 SESSION_SAMPLES_KEY = "pending_samples"
 ADD_FORM_VERSION_KEY = "add_form_version"
@@ -35,6 +36,7 @@ def is_valid_email(email: str) -> bool:
 def validate_request_header(
     email: str,
     request_origin: str,
+    destination: str,
 ) -> list[str]:
     """Validate required request-level fields."""
     errors: list[str] = []
@@ -44,6 +46,8 @@ def validate_request_header(
         errors.append("Enter a valid email address.")
     if not request_origin.strip():
         errors.append("Request origin is required.")
+    if not destination.strip():
+        errors.append("Destination is required.")
     return errors
 
 
@@ -212,12 +216,17 @@ def main() -> None:
     row_2_col_1, row_2_col_2 = st.columns(2)
     with row_2_col_1:
         include_due_date = st.checkbox("Set a due date (optional)", key="include_due_date")
-    with row_2_col_2:
         due_date = st.date_input(
             "Due date",
             value=date.today(),
             disabled=not include_due_date,
             key="due_date",
+        )
+    with row_2_col_2:
+        destination = st.text_input(
+            "Destination *",
+            placeholder="e.g. UK Lab, External partner site",
+            key="request_destination",
         )
     due_date_value = due_date if include_due_date else None
 
@@ -314,10 +323,15 @@ def main() -> None:
 
     if st.session_state.pop("show_submit_success", False):
         st.success("Your sample request was submitted successfully.")
+    if st.session_state.pop("excel_sync_failed", False):
+        st.warning(
+            "Your request was saved, but the Excel log could not be updated. "
+            "Please contact your administrator."
+        )
 
     if submit_clicked:
         pending = st.session_state[SESSION_SAMPLES_KEY]
-        header_errors = validate_request_header(email, request_origin)
+        header_errors = validate_request_header(email, request_origin, destination)
         if header_errors:
             for message in header_errors:
                 st.error(message)
@@ -328,12 +342,14 @@ def main() -> None:
 
         email_value = email.strip()
         origin_value = request_origin.strip()
+        destination_value = destination.strip()
         items_to_save = [
             {
                 "formula_code": sample["formula_code"],
                 "formula_name": sample["formula_name"],
                 "num_samples": sample["num_samples"],
                 "due_date": due_date_value,
+                "destination": destination_value,
                 "request_origin": origin_value,
                 "email": email_value,
             }
@@ -341,13 +357,21 @@ def main() -> None:
         ]
 
         try:
-            save_sample_requests(items_to_save)
+            saved = save_sample_requests(items_to_save)
         except Exception as exc:
             st.error(f"Could not save request: {exc}")
             return
 
+        excel_sync_failed = False
+        if is_excel_sync_enabled():
+            try:
+                sync_saved_requests_to_excel(saved)
+            except Exception:
+                excel_sync_failed = True
+
         st.session_state[SESSION_SAMPLES_KEY] = []
         st.session_state["show_submit_success"] = True
+        st.session_state["excel_sync_failed"] = excel_sync_failed
         st.rerun()
 
 

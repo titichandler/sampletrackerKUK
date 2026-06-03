@@ -8,6 +8,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Generator
 
+from sampletracker.dates import format_display_date
+
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -68,16 +70,38 @@ def _is_sqlite_engine(engine: Engine) -> bool:
     return engine.dialect.name == "sqlite"
 
 
-def migrate_schema(engine: Engine) -> None:
-    """Apply lightweight schema updates for existing SQLite databases only."""
-    if not _is_sqlite_engine(engine):
-        return
+def _add_destination_column(connection: Any, dialect: str) -> None:
+    if dialect == "postgresql":
+        connection.execute(
+            text(
+                "ALTER TABLE sample_requests "
+                "ADD COLUMN IF NOT EXISTS destination VARCHAR(255) NOT NULL DEFAULT ''"
+            )
+        )
+    else:
+        connection.execute(
+            text(
+                "ALTER TABLE sample_requests "
+                "ADD COLUMN destination VARCHAR(255) NOT NULL DEFAULT ''"
+            )
+        )
 
+
+def migrate_schema(engine: Engine) -> None:
+    """Apply lightweight schema updates for existing databases."""
     inspector = inspect(engine)
     if "sample_requests" not in inspector.get_table_names():
         return
 
     columns = {column["name"]: column for column in inspector.get_columns("sample_requests")}
+    needs_destination = "destination" not in columns
+
+    if not _is_sqlite_engine(engine):
+        if needs_destination:
+            with engine.begin() as connection:
+                _add_destination_column(connection, engine.dialect.name)
+        return
+
     needs_email = "email" not in columns
     needs_request_number = "request_number" not in columns
     due_date_column = columns.get("due_date")
@@ -86,6 +110,9 @@ def migrate_schema(engine: Engine) -> None:
     )
 
     with engine.begin() as connection:
+        if needs_destination:
+            _add_destination_column(connection, "sqlite")
+
         if needs_email:
             connection.execute(
                 text(
@@ -113,6 +140,7 @@ def migrate_schema(engine: Engine) -> None:
                         formula_name VARCHAR(255) NOT NULL,
                         num_samples INTEGER NOT NULL,
                         due_date DATE,
+                        destination VARCHAR(255) NOT NULL DEFAULT '',
                         request_origin VARCHAR(255) NOT NULL,
                         email VARCHAR(255) NOT NULL DEFAULT '',
                         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -125,10 +153,11 @@ def migrate_schema(engine: Engine) -> None:
                     """
                     INSERT INTO sample_requests_new (
                         id, request_number, formula_code, formula_name, num_samples, due_date,
-                        request_origin, email, created_at
+                        destination, request_origin, email, created_at
                     )
                     SELECT
                         id, '', formula_code, formula_name, num_samples, due_date,
+                        COALESCE(destination, ''),
                         request_origin,
                         COALESCE(email, ''),
                         created_at
@@ -219,6 +248,8 @@ def _record_to_dict(record: SampleRequest) -> dict[str, Any]:
         "formula_name": record.formula_name,
         "num_samples": record.num_samples,
         "due_date": record.due_date.isoformat() if record.due_date else None,
+        "due_date_display": format_display_date(record.due_date),
+        "destination": record.destination,
         "request_origin": record.request_origin,
         "email": record.email,
         "created_at": record.created_at.isoformat(),
@@ -231,6 +262,7 @@ def save_sample_request(
     num_samples: int,
     request_origin: str,
     email: str,
+    destination: str,
     due_date: date | None = None,
 ) -> dict[str, Any]:
     """Insert one row into sample_requests and return saved values."""
@@ -241,6 +273,7 @@ def save_sample_request(
                 "formula_name": formula_name,
                 "num_samples": num_samples,
                 "due_date": due_date,
+                "destination": destination,
                 "request_origin": request_origin,
                 "email": email,
             }
@@ -262,6 +295,7 @@ def save_sample_requests(
                 formula_name=item["formula_name"],
                 num_samples=item["num_samples"],
                 due_date=item.get("due_date"),
+                destination=item["destination"],
                 request_origin=item["request_origin"],
                 email=item["email"],
             )

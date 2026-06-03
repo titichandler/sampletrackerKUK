@@ -34,6 +34,7 @@ class SampleRequest(Base):
     formula_name: Mapped[str] = mapped_column(String(255), nullable=False)
     num_samples: Mapped[int] = mapped_column(Integer, nullable=False)
     due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    destination: Mapped[str] = mapped_column(String(255), nullable=False)
     request_origin: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
