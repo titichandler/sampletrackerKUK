@@ -33,3 +33,14 @@ def format_display_datetime(value: datetime | None) -> str:
     if value is None:
         return ""
     return format_display_date(value.date())
+
+
+def format_for_excel_cell(value: str) -> str:
+    """
+    Prefix with a single quote so Excel treats the value as text.
+
+    Excel hides the leading quote in the cell; the displayed value stays DD/MON/YYYY.
+    """
+    if not value:
+        return ""
+    return f"'{value}"

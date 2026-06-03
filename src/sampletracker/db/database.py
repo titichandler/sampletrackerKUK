@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Generator
 
-from sampletracker.dates import format_display_date
+from sampletracker.dates import format_display_date, format_display_datetime
 
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.engine import Engine
@@ -248,11 +248,13 @@ def _record_to_dict(record: SampleRequest) -> dict[str, Any]:
         "formula_name": record.formula_name,
         "num_samples": record.num_samples,
         "due_date": record.due_date.isoformat() if record.due_date else None,
+        "due_date_formatted": format_display_date(record.due_date),
         "due_date_display": format_display_date(record.due_date),
         "destination": record.destination,
         "request_origin": record.request_origin,
         "email": record.email,
         "created_at": record.created_at.isoformat(),
+        "created_at_formatted": format_display_datetime(record.created_at),
     }
 
 

@@ -9,7 +9,11 @@ import urllib.request
 from datetime import date, datetime
 from typing import Any
 
-from sampletracker.dates import format_display_date, format_display_datetime
+from sampletracker.dates import (
+    format_display_date,
+    format_display_datetime,
+    format_for_excel_cell,
+)
 
 MANUAL_CODE_PLACEHOLDER = "MANUAL"
 _WEBHOOK_TIMEOUT_SECONDS = 30
@@ -40,8 +44,12 @@ def is_excel_sync_enabled() -> bool:
 
 
 def _format_due_date_for_excel(record: dict[str, Any]) -> str:
-    if record.get("due_date_display"):
-        return str(record["due_date_display"])
+    """Always return DD/MON/YYYY (e.g. 02/JUN/2026) for the Excel log."""
+    for key in ("due_date_formatted", "due_date_display"):
+        text = record.get(key)
+        if text:
+            return str(text)
+
     raw = record.get("due_date")
     if not raw:
         return ""
@@ -51,15 +59,21 @@ def _format_due_date_for_excel(record: dict[str, Any]) -> str:
 
 
 def _format_created_at_for_excel(record: dict[str, Any]) -> str:
+    """Always return DD/MON/YYYY for the submitted timestamp."""
+    text = record.get("created_at_formatted")
+    if text:
+        return str(text)
+
     raw = record.get("created_at")
     if not raw:
         return ""
     if isinstance(raw, datetime):
         return format_display_datetime(raw)
-    text = str(raw)
-    if "T" in text:
-        return format_display_datetime(datetime.fromisoformat(text))
-    return format_display_date(date.fromisoformat(text[:10]))
+    value = str(raw).replace("Z", "+00:00")
+    try:
+        return format_display_datetime(datetime.fromisoformat(value))
+    except ValueError:
+        return format_display_date(date.fromisoformat(value[:10]))
 
 
 def _rows_for_webhook(saved: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -67,6 +81,8 @@ def _rows_for_webhook(saved: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for record in saved:
         formula_code = record["formula_code"]
+        due_text = _format_due_date_for_excel(record)
+        created_text = _format_created_at_for_excel(record)
         rows.append(
             {
                 "request_number": record["request_number"],
@@ -77,11 +93,13 @@ def _rows_for_webhook(saved: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 ),
                 "formula_name": record["formula_name"],
                 "num_samples": record["num_samples"],
-                "due_date": _format_due_date_for_excel(record),
+                "due_date": format_for_excel_cell(due_text),
+                "due_date_text": format_for_excel_cell(due_text),
                 "destination": record.get("destination", ""),
                 "request_origin": record["request_origin"],
                 "email": record["email"],
-                "created_at": _format_created_at_for_excel(record),
+                "created_at": format_for_excel_cell(created_text),
+                "created_at_text": format_for_excel_cell(created_text),
             }
         )
     return rows

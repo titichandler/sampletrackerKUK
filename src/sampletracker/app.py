@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from sampletracker.dates import format_display_date
 from sampletracker.db.database import ensure_schema, save_sample_requests
 from sampletracker.excel_log import is_excel_sync_enabled, sync_saved_requests_to_excel
 
@@ -222,6 +223,8 @@ def main() -> None:
             disabled=not include_due_date,
             key="due_date",
         )
+        if include_due_date:
+            st.caption(f"Saved as: **{format_display_date(due_date)}**")
     with row_2_col_2:
         destination = st.text_input(
             "Destination *",
